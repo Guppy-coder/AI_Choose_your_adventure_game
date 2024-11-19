@@ -31,35 +31,54 @@ Here is the chat history, use this to understand what to say next: {chat_history
 Human: {human_input}
 AI:"""
 
-session = connect_to_vector_db()
+# session = connect_to_vector_db()
 
-message_history= CassandraChatMessageHistory(
-    session_id = 'anything',
-    session = session,
-    keyspace = ASTRADB_KEYSPACE,
-    ttl_seconds = 3600
-)
+# message_history= CassandraChatMessageHistory(
+#     session_id = 'anything',
+#     session = session,
+#     keyspace = ASTRADB_KEYSPACE,
+#     ttl_seconds = 3600
+# )
 
-message_history.clear()
+# message_history.clear()
 
-cass_message_buffer = ConversationBufferMemory(
-    memory_key="chat_history",
-    chat_memory=message_history
-)
+conversation_history = {}
 
-llm = OpenAI(openai_api_key = OPENAI_API_KEY)
+def update_conversation_history(role, message):
+    global conversation_history
+    conversation_history[len(conversation_history)] = {"role": role, "content": message}
 
+def get_chat_history_string():
+    global conversation_history
+    history_str = ""
+    for i in range(len(conversation_history)):
+        history_str += f"{conversation_history[i]['role']}: {conversation_history[i]['content']}\n"
+    return history_str
+
+# Initialize the OpenAI LLM
+llm = OpenAI(openai_api_key=OPENAI_API_KEY)
+
+# Define the prompt template with proper parameters
 prompt = PromptTemplate(
     template=template,
-    input_variables = ["chat_history", "human_input"]
+    input_variables=["chat_history", "human_input"]
 )
 
-llm_chain = LLMChain(
-    llm = llm,
-    prompt = prompt,
-    memory = cass_message_buffer
-)
+# Start the game
+while True:
+    human_input = input("You: ")
+    update_conversation_history("Human", human_input)
 
-resp = llm_chain.predict(human_input = "start the game")
+    prompt_with_history = prompt.format(
+        chat_history=get_chat_history_string(),
+        human_input=human_input
+    )
 
-print(resp)
+    response = llm(prompt_with_history)
+    update_conversation_history("AI", response)
+
+    print(f"AI: {response}")
+
+    # Check for end condition (e.g., "The End" in the response)
+    if "The End" in response:
+        break
